@@ -31,6 +31,8 @@ export type Level = "A1" | "A2" | "B1" | "B2" | "C1";
 
 export interface Settings {
   apiKey: string;
+  /** Base URL of the Claude-compatible API, without a trailing /v1. */
+  apiBaseUrl: string;
   level: Level;
   glossModel: string;
   explainModel: string;
@@ -43,8 +45,11 @@ export interface Settings {
   enabled: boolean;
 }
 
+export const DEFAULT_API_BASE_URL = "https://api.anthropic.com";
+
 export const DEFAULT_SETTINGS: Settings = {
   apiKey: "",
+  apiBaseUrl: DEFAULT_API_BASE_URL,
   level: "B1",
   glossModel: "claude-haiku-5-5",
   explainModel: "claude-opus-5-5",

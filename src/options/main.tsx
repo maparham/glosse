@@ -1,13 +1,14 @@
 import { render } from "preact";
 import { useEffect, useState } from "preact/hooks";
 import { loadSettings, saveSettings } from "../shared/settings";
-import { DEFAULT_SETTINGS, type Level, type Settings } from "../shared/types";
+import { DEFAULT_API_BASE_URL, DEFAULT_SETTINGS, type Level, type Settings } from "../shared/types";
 
 const LEVELS: Level[] = ["A1", "A2", "B1", "B2", "C1"];
 
 function App() {
   const [s, setS] = useState<Settings>(DEFAULT_SETTINGS);
   const [saved, setSaved] = useState(false);
+  const [permError, setPermError] = useState<string | null>(null);
 
   useEffect(() => {
     loadSettings().then(setS);
@@ -17,7 +18,22 @@ function App() {
 
   const save = async (e: Event) => {
     e.preventDefault();
-    await saveSettings(s);
+    setPermError(null);
+    const base = (s.apiBaseUrl || DEFAULT_API_BASE_URL).trim();
+    let origin: string;
+    try {
+      origin = new URL(base).origin + "/*";
+    } catch {
+      setPermError("The API URL is not a valid URL.");
+      return;
+    }
+    const granted = await chrome.permissions.contains({ origins: [origin] })
+      || await chrome.permissions.request({ origins: [origin] });
+    if (!granted) {
+      setPermError(`Chrome needs permission to reach ${origin} for the extension to call this API.`);
+      return;
+    }
+    await saveSettings({ ...s, apiBaseUrl: base });
     setSaved(true);
     setTimeout(() => setSaved(false), 1500);
   };
@@ -32,6 +48,14 @@ function App() {
       <label>Claude API key</label>
       <input type="password" value={s.apiKey} onInput={(e) => update({ apiKey: e.currentTarget.value.trim() })} placeholder="sk-ant-…" />
       <p class="note">Create one at console.anthropic.com. Consider setting a spend limit there.</p>
+
+      <label>API base URL</label>
+      <input type="text" value={s.apiBaseUrl} onInput={(e) => update({ apiBaseUrl: e.currentTarget.value })} placeholder={DEFAULT_API_BASE_URL} />
+      <p class="note">
+        Default is {DEFAULT_API_BASE_URL}. Set this to a proxy or gateway that speaks the Claude Messages API.
+        Enter the base only; the extension appends /v1/messages. Chrome will ask once to allow the new host.
+      </p>
+      {permError && <p class="note" style="color:#b00">{permError}</p>}
 
       <label>Your German level</label>
       <select value={s.level} onChange={(e) => update({ level: e.currentTarget.value as Level })}>

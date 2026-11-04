@@ -8,6 +8,8 @@ export default defineManifest({
     "Literal, word-order-preserving English gloss under German YouTube subtitles, powered by the Claude API with your own key.",
   permissions: ["storage"],
   host_permissions: ["https://www.youtube.com/*", "https://api.anthropic.com/*"],
+  // A custom API base URL is granted on demand from the options page.
+  optional_host_permissions: ["https://*/*", "http://*/*"],
   background: { service_worker: "src/background/index.ts", type: "module" },
   options_page: "src/options/index.html",
   content_scripts: [

@@ -25,6 +25,7 @@ npm run build
 
 1. Open `chrome://extensions`, turn on Developer mode, click **Load unpacked**, pick the `dist` folder.
 2. The options page opens. Paste your Claude API key (console.anthropic.com), pick your level, save.
+   The API base URL can be changed there too, for a proxy or gateway; Chrome asks once to allow the new host.
 3. Open a YouTube video that has a **German subtitle track** and turn it on (Settings → Subtitles → Deutsch, not auto-translate).
 4. The native captions are replaced by the three-line panel: German, literal gloss, fluent English.
 

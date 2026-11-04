@@ -1,7 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { z } from "zod";
-import type { Gloss, GlossRequestItem, Settings } from "../shared/types";
+import { DEFAULT_API_BASE_URL, type Gloss, type GlossRequestItem, type Settings } from "../shared/types";
 
 const PosSchema = z.enum([
   "noun", "verb", "sep-prefix", "article", "pronoun", "adjective",
@@ -52,12 +52,19 @@ function userPrompt(items: GlossRequestItem[]): string {
     .join("\n\n");
 }
 
+/** Trim whitespace and a trailing slash or /v1, which the SDK adds itself. */
+export function normalizeBaseUrl(url: string): string {
+  const trimmed = (url || "").trim().replace(/\/+$/, "").replace(/\/v1$/, "");
+  return trimmed || DEFAULT_API_BASE_URL;
+}
+
 export async function glossBatch(
   items: GlossRequestItem[],
   settings: Settings,
 ): Promise<Record<string, Gloss>> {
   const client = new Anthropic({
     apiKey: settings.apiKey,
+    baseURL: normalizeBaseUrl(settings.apiBaseUrl),
     dangerouslyAllowBrowser: true,
     defaultHeaders: { "anthropic-dangerous-direct-browser-access": "true" },
   });
