@@ -333,15 +333,53 @@ window.addEventListener("message", async (ev: MessageEvent<TimedTextMessage>) =>
   setCues(parsed, info.kind === "asr" ? "Auto-generated captions: punctuation may be missing." : null);
 });
 
+let trackQuerySeq = 0;
+
+/** Ask the MAIN-world script which caption track the player shows. Null if it does not answer. */
+function queryTrack(): Promise<{ lang: string | null; tlang: string | null } | null> {
+  const id = ++trackQuerySeq;
+  return new Promise((resolve) => {
+    const done = (r: { lang: string | null; tlang: string | null } | null) => {
+      window.removeEventListener("message", onReply);
+      clearTimeout(timer);
+      resolve(r);
+    };
+    const onReply = (ev: MessageEvent) => {
+      const m = ev.data;
+      if (ev.source === window && m?.source === "glosse" && m.type === "track" && m.id === id) done(m);
+    };
+    const timer = window.setTimeout(() => done(null), 500);
+    window.addEventListener("message", onReply);
+    window.postMessage({ source: "glosse", type: "track-query", id }, "*");
+  });
+}
+
+function leaveDomFallback() {
+  domFallbackMode = false;
+  cues = [];
+  currentIndex = -1;
+  state.cue = null; state.gloss = null; state.hint = null;
+  hideNativeCaptions(false);
+  version++;
+  sync();
+}
+
 /**
  * No usable track data: read the rendered caption text instead, one cue at a time.
- * Silent until the player actually renders a caption, so videos without subtitles show nothing.
+ * Silent until the player actually renders a caption, so videos without subtitles show nothing,
+ * and silent while the selected track is not German, so other captions are left alone.
  */
 function startDomFallback() {
   if (stopDomFallback) return;
-  stopDomFallback = observeRenderedCaptions((text) => {
+  stopDomFallback = observeRenderedCaptions(async (text) => {
     const v = video();
     const t = v?.currentTime ?? 0;
+    const track = await queryTrack();
+    if (!stopDomFallback) return;
+    if (track && (track.tlang || !track.lang?.toLowerCase().startsWith("de"))) {
+      if (domFallbackMode) leaveDomFallback();
+      return;
+    }
     if (!domFallbackMode) {
       domFallbackMode = true;
       cues = [];

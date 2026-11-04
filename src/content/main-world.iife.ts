@@ -11,6 +11,25 @@
     window.postMessage({ source: SOURCE, type: "timedtext", url, body }, "*");
   };
 
+  // The content script cannot reach the player API, so it asks here which
+  // caption track is selected when it has to read rendered captions.
+  type CaptionTrack = { languageCode?: string; translationLanguage?: { languageCode?: string } };
+  window.addEventListener("message", (ev) => {
+    const m = ev.data;
+    if (ev.source !== window || !m || m.source !== SOURCE || m.type !== "track-query") return;
+    let track: CaptionTrack | null = null;
+    try {
+      const p = document.querySelector("#movie_player") as (HTMLElement & { getOption?: (m: string, k: string) => CaptionTrack }) | null;
+      track = p?.getOption?.("captions", "track") ?? null;
+    } catch {
+      /* player API missing or changed */
+    }
+    window.postMessage({
+      source: SOURCE, type: "track", id: m.id,
+      lang: track?.languageCode ?? null, tlang: track?.translationLanguage?.languageCode ?? null,
+    }, "*");
+  });
+
   // fetch
   const origFetch = window.fetch;
   window.fetch = async function (input: RequestInfo | URL, init?: RequestInit) {
