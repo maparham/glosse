@@ -78,6 +78,14 @@ function App() {
       <input type="number" min={1} max={20} value={s.lookahead} onInput={(e) => update({ lookahead: Number(e.currentTarget.value) || 5 })} />
 
       <div class="row" style="margin-top:14px">
+        <input id="whole" type="checkbox" checked={s.glossWholeVideo} onChange={(e) => update({ glossWholeVideo: e.currentTarget.checked })} />
+        <label for="whole">Gloss the whole video in the background (about 1 cent per 10 minutes on Haiku)</label>
+      </div>
+      <div class="row">
+        <input id="transcript" type="checkbox" checked={s.showTranscript} onChange={(e) => update({ showTranscript: e.currentTarget.checked })} />
+        <label for="transcript">Show the transcript panel beside the video (click a line to jump there)</label>
+      </div>
+      <div class="row">
         <input id="fluent" type="checkbox" checked={s.showFluent} onChange={(e) => update({ showFluent: e.currentTarget.checked })} />
         <label for="fluent">Show the fluent English line</label>
       </div>

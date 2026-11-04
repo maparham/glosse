@@ -18,6 +18,16 @@ Phase 1 (gloss overlay) is implemented and untested against live YouTube. See [d
 
 ## Install (developer mode)
 
+On macOS, one script builds everything and opens Chrome at the right page:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/maparham/glosse/main/scripts/install-macos.sh | bash
+```
+
+Rerun the same script after each update, then click the reload icon on the extension's card. Chrome has no supported way for a script to load an unpacked extension by itself, so the "Load unpacked" click on first install stays manual.
+
+Manually, on any platform:
+
 ```bash
 npm install
 npm run build
@@ -28,6 +38,7 @@ npm run build
    The API base URL can be changed there too, for a proxy or gateway; Chrome asks once to allow the new host.
 3. Open a YouTube video that has a **German subtitle track** and turn it on (Settings → Subtitles → Deutsch, not auto-translate).
 4. The native captions are replaced by the three-line panel: German, literal gloss, fluent English.
+5. A transcript panel appears above the recommendations column with every line and its gloss. Click a line to jump there. The whole video is glossed in the background, nearest lines first.
 
 Keys on a video: **G** toggles the overlay, **[** and **]** replay the previous or next line.
 

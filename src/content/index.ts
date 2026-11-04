@@ -1,5 +1,6 @@
 import { observeRenderedCaptions, parseTimedText, trackInfo } from "./capture";
 import { mountOverlay, type OverlayState } from "./overlay";
+import { mountTranscript, unmountTranscript, type TranscriptProps } from "./transcript";
 import { glossKey } from "../shared/hash";
 import { loadSettings, onSettingsChange, saveSettings } from "../shared/settings";
 import type { BackgroundResponse, Cue, Gloss, GlossRequestItem, Settings, TimedTextMessage } from "../shared/types";
@@ -10,25 +11,30 @@ const MAX_IN_FLIGHT = 2;
 let settings: Settings;
 let cues: Cue[] = [];
 let videoId: string | null = null;
+let domFallbackMode = false;
 const glosses = new Map<string, Gloss>();
 const pending = new Set<string>();
 let inFlight = 0;
+let version = 0;
 let renderPanel: ((s: OverlayState) => void) | null = null;
+let renderTranscript: ((p: TranscriptProps) => void) | null = null;
 let stopDomFallback: (() => void) | null = null;
 let hideNativeStyle: HTMLStyleElement | null = null;
+let currentIndex = -1;
+/** Set when the background reports a missing key, so we stop hammering it until settings change. */
+let apiBlocked = false;
 
 const state: OverlayState = {
   cue: null, gloss: null, status: null, error: null, hint: null,
   settings: undefined as unknown as Settings,
 };
 
-function draw() {
-  state.settings = settings;
-  renderPanel?.(state);
-}
-
 function keyFor(text: string) {
   return glossKey(text, settings.glossModel, settings.level, settings.glossStyle);
+}
+
+function glossFor(cue: Cue): Gloss | null {
+  return glosses.get(keyFor(cue.text)) ?? null;
 }
 
 function currentVideoId(): string | null {
@@ -54,21 +60,54 @@ function hideNativeCaptions(hide: boolean) {
   }
 }
 
-/** Ask the background for glosses of the given cues, batched, at most two batches out. */
-async function requestGloss(targets: Cue[]) {
-  const items: GlossRequestItem[] = [];
-  for (const c of targets) {
-    const key = keyFor(c.text);
-    if (glosses.has(key) || pending.has(key)) continue;
-    items.push({
-      key,
-      text: c.text,
-      prev: cues[c.index - 1]?.text ?? "",
-      next: cues[c.index + 1]?.text ?? "",
+function seekTo(cue: Cue) {
+  const v = video();
+  if (!v) return;
+  v.currentTime = cue.start + 0.01;
+  v.play();
+}
+
+function draw() {
+  state.settings = settings;
+  renderPanel?.(state);
+  if (settings.showTranscript && !domFallbackMode && cues.length) {
+    renderTranscript ??= mountTranscript();
+    renderTranscript?.({
+      cues,
+      glossFor,
+      currentIndex,
+      glossedCount: cues.reduce((n, c) => n + (glosses.has(keyFor(c.text)) ? 1 : 0), 0),
+      settings,
+      onSeek: seekTo,
+      version,
     });
+  } else if (renderTranscript) {
+    unmountTranscript();
+    renderTranscript = null;
   }
-  while (items.length && inFlight < MAX_IN_FLIGHT) {
-    const batch = items.splice(0, BATCH);
+}
+
+/**
+ * Pick what to gloss next: the lookahead window around the playhead first,
+ * then, if enabled, the rest of the video from the playhead onward and
+ * finally the part before it. Up to two batches of five are in flight.
+ */
+function fillQueue() {
+  if (apiBlocked) return;
+  const from = Math.max(0, currentIndex);
+  const order: Cue[] = cues.slice(from, from + 1 + settings.lookahead);
+  if (settings.glossWholeVideo && !domFallbackMode) {
+    order.push(...cues.slice(from + 1 + settings.lookahead), ...cues.slice(0, from));
+  }
+  const todo: GlossRequestItem[] = [];
+  for (const c of order) {
+    const key = keyFor(c.text);
+    if (glosses.has(key) || pending.has(key) || todo.some((t) => t.key === key)) continue;
+    todo.push({ key, text: c.text, prev: cues[c.index - 1]?.text ?? "", next: cues[c.index + 1]?.text ?? "" });
+    if (todo.length >= BATCH * (MAX_IN_FLIGHT - inFlight)) break;
+  }
+  while (todo.length && inFlight < MAX_IN_FLIGHT) {
+    const batch = todo.splice(0, BATCH);
     batch.forEach((b) => pending.add(b.key));
     inFlight++;
     chrome.runtime
@@ -77,6 +116,7 @@ async function requestGloss(targets: Cue[]) {
         if (res.type !== "gloss") return;
         for (const [k, g] of Object.entries(res.results)) glosses.set(k, g);
         state.error = res.error ?? null;
+        apiBlocked = !!res.error && res.error.startsWith("No API key");
       })
       .catch((e: unknown) => {
         state.error = e instanceof Error ? e.message : String(e);
@@ -84,13 +124,13 @@ async function requestGloss(targets: Cue[]) {
       .finally(() => {
         batch.forEach((b) => pending.delete(b.key));
         inFlight--;
+        version++;
         sync();
       });
   }
 }
 
 function findCue(t: number): Cue | null {
-  // Cues are sorted by start; a short linear scan from the end is fine at subtitle sizes.
   for (let i = cues.length - 1; i >= 0; i--) {
     if (cues[i].start <= t) return t < cues[i].end + 0.25 ? cues[i] : null;
   }
@@ -104,26 +144,28 @@ function sync() {
   const cue = findCue(v.currentTime);
   state.cue = cue;
   if (cue) {
+    currentIndex = cue.index;
     const key = keyFor(cue.text);
     state.gloss = glosses.get(key) ?? null;
     state.status = state.gloss ? null : pending.has(key) ? "glossing…" : "waiting…";
-    requestGloss(cues.slice(cue.index, cue.index + 1 + settings.lookahead));
   } else {
     state.gloss = null;
-    // Keep the pipeline warm for the next cue.
     const next = cues.find((c) => c.start > v.currentTime);
-    if (next) requestGloss(cues.slice(next.index, next.index + 1 + settings.lookahead));
+    if (next) currentIndex = next.index;
   }
+  fillQueue();
   draw();
 }
 
 function setCues(next: Cue[], hint: string | null) {
   cues = next;
+  domFallbackMode = false;
   state.hint = hint;
   state.error = null;
   stopDomFallback?.();
   stopDomFallback = null;
   hideNativeCaptions(cues.length > 0);
+  version++;
   sync();
 }
 
@@ -151,6 +193,7 @@ window.addEventListener("message", (ev: MessageEvent<TimedTextMessage>) => {
 /** No usable track data: read the rendered caption text instead, one cue at a time. */
 function startDomFallback() {
   if (stopDomFallback) return;
+  domFallbackMode = true;
   state.hint = "Reading captions from the player. Turn on German subtitles for the best results.";
   let idx = 0;
   stopDomFallback = observeRenderedCaptions((text) => {
@@ -167,9 +210,12 @@ function onNavigate() {
   if (id === videoId) return;
   videoId = id;
   cues = [];
+  currentIndex = -1;
+  domFallbackMode = false;
   state.cue = null; state.gloss = null; state.hint = null; state.error = null;
   hideNativeCaptions(false);
   stopDomFallback?.(); stopDomFallback = null;
+  version++;
   if (!id) { draw(); return; }
   attach();
 }
@@ -185,7 +231,6 @@ function attach() {
     v.addEventListener("timeupdate", sync);
     v.addEventListener("seeking", sync);
   }
-  // If the player already has captions on and we missed the fetch, fall back after a moment.
   setTimeout(() => { if (cues.length === 0 && videoId) startDomFallback(); }, 4000);
   draw();
 }
@@ -200,9 +245,7 @@ function onKey(ev: KeyboardEvent) {
     if (!v || !cues.length) return;
     const cur = findCue(v.currentTime);
     const i = cur ? cur.index + (ev.key === "]" ? 1 : -1) : 0;
-    const target = cues[Math.max(0, Math.min(cues.length - 1, i))];
-    v.currentTime = target.start + 0.01;
-    v.play();
+    seekTo(cues[Math.max(0, Math.min(cues.length - 1, i))]);
   }
 }
 
@@ -212,7 +255,9 @@ function onKey(ev: KeyboardEvent) {
     const modelChanged = s.glossModel !== settings.glossModel || s.level !== settings.level || s.glossStyle !== settings.glossStyle;
     settings = s;
     if (modelChanged) glosses.clear();
+    apiBlocked = false;
     hideNativeCaptions(s.enabled && cues.length > 0);
+    version++;
     sync();
   });
   document.addEventListener("yt-navigate-finish", onNavigate);

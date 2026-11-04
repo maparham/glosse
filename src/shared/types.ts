@@ -36,8 +36,12 @@ export interface Settings {
   level: Level;
   glossModel: string;
   explainModel: string;
-  /** How many cues ahead of the playhead to gloss. */
+  /** How many cues ahead of the playhead to gloss first. */
   lookahead: number;
+  /** After the lookahead window, keep glossing the rest of the video in the background. */
+  glossWholeVideo: boolean;
+  /** Show the transcript panel beside the video. */
+  showTranscript: boolean;
   showFluent: boolean;
   colourPos: boolean;
   /** Strict word order, or lightly smoothed English. */
@@ -54,6 +58,8 @@ export const DEFAULT_SETTINGS: Settings = {
   glossModel: "claude-haiku-5-5",
   explainModel: "claude-opus-5-5",
   lookahead: 5,
+  glossWholeVideo: true,
+  showTranscript: true,
   showFluent: true,
   colourPos: true,
   glossStyle: "strict",
