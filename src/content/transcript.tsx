@@ -30,9 +30,14 @@ function Transcript(p: TranscriptProps) {
   useEffect(() => {
     if (collapsed || p.currentIndex < 0) return;
     if (Date.now() - userScrolledAt.current < 4000) return;
-    const el = listRef.current?.querySelector<HTMLElement>(`[data-i="${p.currentIndex}"]`);
-    el?.scrollIntoView({ block: "center", behavior: "smooth" });
+    const list = listRef.current;
+    const el = list?.querySelector<HTMLElement>(`[data-i="${p.currentIndex}"]`);
+    if (!list || !el) return;
+    // Scroll the list itself; scrollIntoView would also scroll the YouTube page.
+    list.scrollTo({ top: el.offsetTop - list.clientHeight / 2 + el.offsetHeight / 2, behavior: "smooth" });
   }, [p.currentIndex, collapsed]);
+
+  useEffect(() => setShowFluent(p.settings.showFluent), [p.settings.showFluent]);
 
   const dark = document.documentElement.hasAttribute("dark");
 

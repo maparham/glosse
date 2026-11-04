@@ -7,6 +7,10 @@ import type { BackgroundResponse, Cue, Gloss, GlossRequestItem, Settings, TimedT
 
 const BATCH = 5;
 const MAX_IN_FLIGHT = 2;
+/** Give up on a cue after this many failed or skipped attempts. */
+const MAX_ATTEMPTS = 3;
+const BACKOFF_MIN_MS = 2_000;
+const BACKOFF_MAX_MS = 60_000;
 
 let settings: Settings;
 let cues: Cue[] = [];
@@ -14,23 +18,42 @@ let videoId: string | null = null;
 let domFallbackMode = false;
 const glosses = new Map<string, Gloss>();
 const pending = new Set<string>();
+const attempts = new Map<string, number>();
+/** text -> cache key, cleared when model, level or style change. */
+const keyCache = new Map<string, string>();
 let inFlight = 0;
 let version = 0;
 let renderPanel: ((s: OverlayState) => void) | null = null;
 let renderTranscript: ((p: TranscriptProps) => void) | null = null;
 let stopDomFallback: (() => void) | null = null;
 let hideNativeStyle: HTMLStyleElement | null = null;
+let boundVideo: HTMLVideoElement | null = null;
 let currentIndex = -1;
-/** Set when the background reports a missing key, so we stop hammering it until settings change. */
+/** Set when the background reports a missing key; cleared when settings change. */
 let apiBlocked = false;
+/** Exponential backoff after an API error, so a 429 or outage is not hammered. */
+let backoffMs = BACKOFF_MIN_MS;
+let backoffUntil = 0;
+let backoffTimer: number | undefined;
+/** Transcript render memo. */
+let drawnIndex = -2;
+let drawnVersion = -1;
+let glossedCount = 0;
 
 const state: OverlayState = {
   cue: null, gloss: null, status: null, error: null, hint: null,
   settings: undefined as unknown as Settings,
 };
 
-function keyFor(text: string) {
-  return glossKey(text, settings.glossModel, settings.level, settings.glossStyle);
+const settingsLoaded = loadSettings().then((s) => (settings = s));
+
+function keyFor(text: string): string {
+  let k = keyCache.get(text);
+  if (!k) {
+    k = glossKey(text, settings.glossModel, settings.level, settings.glossStyle);
+    keyCache.set(text, k);
+  }
+  return k;
 }
 
 function glossFor(cue: Cue): Gloss | null {
@@ -70,21 +93,24 @@ function seekTo(cue: Cue) {
 function draw() {
   state.settings = settings;
   renderPanel?.(state);
-  if (settings.showTranscript && !domFallbackMode && cues.length) {
-    renderTranscript ??= mountTranscript();
-    renderTranscript?.({
-      cues,
-      glossFor,
-      currentIndex,
-      glossedCount: cues.reduce((n, c) => n + (glosses.has(keyFor(c.text)) ? 1 : 0), 0),
-      settings,
-      onSeek: seekTo,
-      version,
-    });
-  } else if (renderTranscript) {
-    unmountTranscript();
-    renderTranscript = null;
+  const wantTranscript = settings.showTranscript && !domFallbackMode && cues.length > 0;
+  if (!wantTranscript) {
+    if (renderTranscript) { unmountTranscript(); renderTranscript = null; }
+    return;
   }
+  if (drawnIndex === currentIndex && drawnVersion === version && renderTranscript) return;
+  renderTranscript ??= mountTranscript();
+  if (!renderTranscript) return;
+  if (drawnVersion !== version) {
+    glossedCount = cues.reduce((n, c) => n + (glosses.has(keyFor(c.text)) ? 1 : 0), 0);
+  }
+  drawnIndex = currentIndex;
+  drawnVersion = version;
+  renderTranscript({ cues, glossFor, currentIndex, glossedCount, settings, onSeek: seekTo, version });
+}
+
+function noteFailure(keys: string[]) {
+  for (const k of keys) attempts.set(k, (attempts.get(k) ?? 0) + 1);
 }
 
 /**
@@ -93,7 +119,7 @@ function draw() {
  * finally the part before it. Up to two batches of five are in flight.
  */
 function fillQueue() {
-  if (apiBlocked) return;
+  if (apiBlocked || Date.now() < backoffUntil) return;
   const from = Math.max(0, currentIndex);
   const order: Cue[] = cues.slice(from, from + 1 + settings.lookahead);
   if (settings.glossWholeVideo && !domFallbackMode) {
@@ -102,13 +128,15 @@ function fillQueue() {
   const todo: GlossRequestItem[] = [];
   for (const c of order) {
     const key = keyFor(c.text);
-    if (glosses.has(key) || pending.has(key) || todo.some((t) => t.key === key)) continue;
+    if (glosses.has(key) || pending.has(key) || (attempts.get(key) ?? 0) >= MAX_ATTEMPTS) continue;
+    if (todo.some((t) => t.key === key)) continue;
     todo.push({ key, text: c.text, prev: cues[c.index - 1]?.text ?? "", next: cues[c.index + 1]?.text ?? "" });
     if (todo.length >= BATCH * (MAX_IN_FLIGHT - inFlight)) break;
   }
   while (todo.length && inFlight < MAX_IN_FLIGHT) {
     const batch = todo.splice(0, BATCH);
-    batch.forEach((b) => pending.add(b.key));
+    const keys = batch.map((b) => b.key);
+    keys.forEach((k) => pending.add(k));
     inFlight++;
     chrome.runtime
       .sendMessage({ type: "gloss", items: batch })
@@ -116,18 +144,34 @@ function fillQueue() {
         if (res.type !== "gloss") return;
         for (const [k, g] of Object.entries(res.results)) glosses.set(k, g);
         state.error = res.error ?? null;
-        apiBlocked = !!res.error && res.error.startsWith("No API key");
+        if (res.error) {
+          apiBlocked = res.error.startsWith("No API key");
+          onApiError(keys);
+        } else {
+          backoffMs = BACKOFF_MIN_MS;
+          // Cues the model skipped count as an attempt; after MAX_ATTEMPTS they are left unglossed.
+          noteFailure(keys.filter((k) => !glosses.has(k)));
+        }
       })
       .catch((e: unknown) => {
         state.error = e instanceof Error ? e.message : String(e);
+        onApiError(keys);
       })
       .finally(() => {
-        batch.forEach((b) => pending.delete(b.key));
+        keys.forEach((k) => pending.delete(k));
         inFlight--;
         version++;
         sync();
       });
   }
+}
+
+function onApiError(keys: string[]) {
+  noteFailure(keys);
+  backoffUntil = Date.now() + backoffMs;
+  clearTimeout(backoffTimer);
+  backoffTimer = window.setTimeout(sync, backoffMs + 50);
+  backoffMs = Math.min(backoffMs * 2, BACKOFF_MAX_MS);
 }
 
 function findCue(t: number): Cue | null {
@@ -147,7 +191,12 @@ function sync() {
     currentIndex = cue.index;
     const key = keyFor(cue.text);
     state.gloss = glosses.get(key) ?? null;
-    state.status = state.gloss ? null : pending.has(key) ? "glossing…" : "waiting…";
+    state.status = state.gloss
+      ? null
+      : pending.has(key) ? "glossing…"
+      : (attempts.get(key) ?? 0) >= MAX_ATTEMPTS ? "no gloss for this line"
+      : Date.now() < backoffUntil ? "retrying soon…"
+      : "waiting…";
   } else {
     state.gloss = null;
     const next = cues.find((c) => c.start > v.currentTime);
@@ -164,15 +213,16 @@ function setCues(next: Cue[], hint: string | null) {
   state.error = null;
   stopDomFallback?.();
   stopDomFallback = null;
-  hideNativeCaptions(cues.length > 0);
+  hideNativeCaptions(settings.enabled && cues.length > 0);
   version++;
   sync();
 }
 
 /** The MAIN-world script hands us the player's own caption fetches. */
-window.addEventListener("message", (ev: MessageEvent<TimedTextMessage>) => {
+window.addEventListener("message", async (ev: MessageEvent<TimedTextMessage>) => {
   const m = ev.data;
   if (ev.source !== window || !m || m.source !== "glosse" || m.type !== "timedtext") return;
+  await settingsLoaded;
   const info = trackInfo(m.url);
   if (info.tlang) {
     setCues([], "Auto-translate is on. Pick the German subtitle track itself (Settings → Subtitles → Deutsch).");
@@ -190,17 +240,23 @@ window.addEventListener("message", (ev: MessageEvent<TimedTextMessage>) => {
   setCues(parsed, info.kind === "asr" ? "Auto-generated captions: punctuation may be missing." : null);
 });
 
-/** No usable track data: read the rendered caption text instead, one cue at a time. */
+/**
+ * No usable track data: read the rendered caption text instead, one cue at a time.
+ * Silent until the player actually renders a caption, so videos without subtitles show nothing.
+ */
 function startDomFallback() {
   if (stopDomFallback) return;
-  domFallbackMode = true;
-  state.hint = "Reading captions from the player. Turn on German subtitles for the best results.";
-  let idx = 0;
   stopDomFallback = observeRenderedCaptions((text) => {
     const v = video();
     const t = v?.currentTime ?? 0;
-    const cue: Cue = { index: idx++, start: t, end: t + 6, text };
-    cues = [...cues.slice(-20), cue];
+    if (!domFallbackMode) {
+      domFallbackMode = true;
+      cues = [];
+      state.hint = "Reading captions from the player. Turn on German subtitles for the best results.";
+      hideNativeCaptions(settings.enabled);
+    }
+    // index always equals the array position, which fillQueue relies on.
+    cues = [...cues, { index: cues.length, start: t, end: t + 6, text }];
     sync();
   });
 }
@@ -220,16 +276,18 @@ function onNavigate() {
   attach();
 }
 
-let attached = false;
 function attach() {
   const p = player();
   const v = video();
   if (!p || !v) { setTimeout(attach, 500); return; }
   renderPanel = mountOverlay(p);
-  if (!attached) {
-    attached = true;
+  // YouTube can replace the <video> element; always follow the current one.
+  if (boundVideo !== v) {
+    boundVideo?.removeEventListener("timeupdate", sync);
+    boundVideo?.removeEventListener("seeking", sync);
     v.addEventListener("timeupdate", sync);
     v.addEventListener("seeking", sync);
+    boundVideo = v;
   }
   setTimeout(() => { if (cues.length === 0 && videoId) startDomFallback(); }, 4000);
   draw();
@@ -250,12 +308,14 @@ function onKey(ev: KeyboardEvent) {
 }
 
 (async () => {
-  settings = await loadSettings();
+  await settingsLoaded;
   onSettingsChange((s) => {
     const modelChanged = s.glossModel !== settings.glossModel || s.level !== settings.level || s.glossStyle !== settings.glossStyle;
     settings = s;
-    if (modelChanged) glosses.clear();
+    if (modelChanged) { glosses.clear(); keyCache.clear(); attempts.clear(); }
     apiBlocked = false;
+    backoffUntil = 0;
+    backoffMs = BACKOFF_MIN_MS;
     hideNativeCaptions(s.enabled && cues.length > 0);
     version++;
     sync();

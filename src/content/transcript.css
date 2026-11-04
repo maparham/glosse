@@ -24,7 +24,7 @@
 }
 .head button.on { background: var(--hl); border-color: var(--accent); }
 
-.list { max-height: 70vh; overflow-y: auto; padding: 4px 0; }
+.list { position: relative; max-height: 70vh; overflow-y: auto; padding: 4px 0; }
 .list.collapsed { display: none; }
 
 .row {

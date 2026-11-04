@@ -92,14 +92,6 @@ export async function glossBatch(
   for (const cue of parsed.cues) {
     out[cue.id] = { tokens: cue.tokens, fluent: cue.fluent };
   }
-  for (const it of items) {
-    if (!out[it.key]) {
-      // The model skipped a cue: give the overlay something rather than a gap.
-      out[it.key] = {
-        tokens: it.text.split(/\s+/).map((w) => ({ de: w, en: "?", pos: "other", group: null })),
-        fluent: "",
-      };
-    }
-  }
+  // Cues the model skipped are simply absent; the content script retries them a few times.
   return out;
 }
