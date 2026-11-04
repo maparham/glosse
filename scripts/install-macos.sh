@@ -63,6 +63,8 @@ if [[ -n "${GLOSSE_API_KEY:-}" || -n "${GLOSSE_API_BASE_URL:-}" ]]; then
   } > .env.local
 elif [[ -f .env.local ]]; then
   say "Keeping existing .env.local"
+else
+  say "No API key or URL given; set them on the options page (or pass GLOSSE_API_KEY and GLOSSE_API_BASE_URL)"
 fi
 
 # 4. Build
@@ -83,6 +85,7 @@ open -R "$DIST"
 cat <<MSG
 
 Built: $DIST   (path copied to the clipboard)
+Baked defaults: $( [[ -f .env.local ]] && sed -e 's/VITE_GLOSSE_API_KEY=\(.\{8\}\).*/key \1…/' -e 's/VITE_GLOSSE_API_BASE_URL=/url /' .env.local | tr '\n' ' ' || echo none )
 
 First install:
   1. In the chrome://extensions tab, turn on "Developer mode" (top right).

@@ -56,6 +56,8 @@ export const DEFAULT_API_BASE_URL = "https://api.anthropic.com";
 /** Build-time defaults from .env.local, if the build had them. */
 const BAKED_KEY: string = (import.meta.env.VITE_GLOSSE_API_KEY as string | undefined) ?? "";
 const BAKED_BASE_URL: string = (import.meta.env.VITE_GLOSSE_API_BASE_URL as string | undefined) || DEFAULT_API_BASE_URL;
+/** Identifies this build's baked key and URL, so a rebuild with new values is applied once over saved settings. */
+export const BAKED_SIGNATURE = BAKED_KEY || BAKED_BASE_URL !== DEFAULT_API_BASE_URL ? `${BAKED_KEY}|${BAKED_BASE_URL}` : "";
 
 export const DEFAULT_SETTINGS: Settings = {
   apiKey: BAKED_KEY,
