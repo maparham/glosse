@@ -5,6 +5,23 @@ import { DEFAULT_API_BASE_URL, DEFAULT_SETTINGS, type Level, type Settings } fro
 
 const LEVELS: Level[] = ["A1", "A2", "B1", "B2", "C1"];
 
+/** Current Claude models with list prices per million tokens (input / output). */
+const MODELS: { id: string; label: string }[] = [
+  { id: "claude-haiku-5-5", label: "Claude Haiku 5.5 — fastest, $0.10 / $0.50" },
+  { id: "claude-sonnet-5-5", label: "Claude Sonnet 5.5 — balanced, $2 / $10" },
+  { id: "claude-opus-5-5", label: "Claude Opus 5.5 — most capable Opus, $4 / $20" },
+  { id: "claude-fable-5-1", label: "Claude Fable 5.1 — most capable overall, $10 / $50" },
+];
+
+function ModelSelect({ value, onChange }: { value: string; onChange: (id: string) => void }) {
+  const options = MODELS.some((m) => m.id === value) ? MODELS : [{ id: value, label: `${value} (custom)` }, ...MODELS];
+  return (
+    <select value={value} onChange={(e) => onChange(e.currentTarget.value)}>
+      {options.map((m) => <option value={m.id}>{m.label}</option>)}
+    </select>
+  );
+}
+
 function App() {
   const [s, setS] = useState<Settings>(DEFAULT_SETTINGS);
   const [saved, setSaved] = useState(false);
@@ -69,10 +86,11 @@ function App() {
       </select>
 
       <label>Gloss model (runs on every subtitle line)</label>
-      <input type="text" value={s.glossModel} onInput={(e) => update({ glossModel: e.currentTarget.value.trim() })} />
+      <ModelSelect value={s.glossModel} onChange={(glossModel) => update({ glossModel })} />
+      <p class="note">Haiku is recommended here: it runs on every line and costs about a cent per 10 minutes of video.</p>
 
       <label>Explanation model (used from phase 2)</label>
-      <input type="text" value={s.explainModel} onInput={(e) => update({ explainModel: e.currentTarget.value.trim() })} />
+      <ModelSelect value={s.explainModel} onChange={(explainModel) => update({ explainModel })} />
 
       <label>Lines to gloss ahead of the playhead</label>
       <input type="number" min={1} max={20} value={s.lookahead} onInput={(e) => update({ lookahead: Number(e.currentTarget.value) || 5 })} />
