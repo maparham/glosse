@@ -2,7 +2,7 @@
 # Glosse: build and (re)install the extension in Chrome on macOS.
 #
 # Usage, from a clone:        ./scripts/install-macos.sh
-# Or without a clone yet:     curl -fsSL https://raw.githubusercontent.com/maparham/glosse/phase-2-deep-dive/scripts/install-macos.sh | bash
+# Or without a clone yet:     curl -fsSL https://raw.githubusercontent.com/maparham/glosse/main/scripts/install-macos.sh | bash
 #
 # Optional, to bake an API key and base URL into the build (kept in the
 # gitignored .env.local, never committed):
@@ -16,7 +16,7 @@
 set -euo pipefail
 
 REPO_URL="https://github.com/maparham/glosse"
-BRANCH="${GLOSSE_BRANCH:-phase-2-deep-dive}"
+BRANCH="${GLOSSE_BRANCH:-main}"
 CLONE_DIR="${GLOSSE_DIR:-$HOME/glosse}"
 
 say() { printf '\033[1;34m==>\033[0m %s\n' "$*"; }
