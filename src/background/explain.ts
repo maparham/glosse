@@ -8,12 +8,8 @@ export const ExplanationSchema = z.object({
   lemma: z.string(),
   form_here: z.string(),
   grammar: z.array(z.object({ label: z.string(), note: z.string() })),
-  position: z.string(),
   meaning_here: z.string(),
-  other_meanings: z.array(z.string()),
-  confusion: z.string(),
-  examples: z.array(z.object({ de: z.string(), literal: z.string(), fluent: z.string() })).max(3),
-  breakdown: z.array(z.object({ word: z.string(), note: z.string() })),
+  examples: z.array(z.object({ de: z.string(), literal: z.string(), fluent: z.string() })).max(1),
 });
 
 function client(settings: Settings) {
@@ -27,16 +23,12 @@ function client(settings: Settings) {
 
 function systemPrompt(level: string): string {
   return `You are a German tutor for an English-speaking learner at level ${level}, explaining a word or phrase from a video subtitle.
-Be concrete and specific to this sentence; this is beyond a dictionary. Keep each field short: one to three sentences, plain language, no markdown.
+Be brief: the learner can ask follow-up questions for more. Plain language, no markdown.
 - lemma: the dictionary form (with article and plural for nouns, infinitive for verbs).
-- form_here: the exact form used here: case, gender, number, tense, mood, person; for verbs note separable prefixes and where the prefix went.
-- grammar: three to five labelled points about the grammar at work (e.g. "Dative after 'mit'", "Verb-final in subordinate clause").
-- position: why the selection sits where it does in the sentence.
-- meaning_here: what it means in this context.
-- other_meanings: other common meanings, if any; empty list otherwise.
-- confusion: one thing learners commonly mix this up with, and how to tell them apart.
-- examples: three short sentences at the learner's level using the selection, each with a literal (word-order-preserving) and a fluent English line.
-- breakdown: if the selection has several words, one note per word; empty list for a single word.`;
+- form_here: the form used here in a few words (e.g. "dative plural", "past participle, prefix split off").
+- grammar: one to three short labelled points about the grammar at work (e.g. "Dative after 'mit'", "Verb-final in subordinate clause"), each note one short sentence.
+- meaning_here: what it means in this line, in one short sentence.
+- examples: one short sentence at the learner's level using the selection, with a literal (word-order-preserving) and a fluent English line.`;
 }
 
 function userPrompt(ctx: ExplainContext): string {

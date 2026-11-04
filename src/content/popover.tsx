@@ -68,19 +68,9 @@ export function Popover({ state, actions }: { state: PopoverState; actions: Popo
                 <div class="g">{ex.grammar.map((g) => <><b>{g.label}</b><span>{g.note}</span></>)}</div>
               </div>
             )}
-            <div class="sec"><h4>Why here</h4><p>{ex.position}</p></div>
             <div class="sec"><h4>Meaning in this line</h4><p>{ex.meaning_here}</p></div>
-            {ex.other_meanings.length > 0 && (
-              <div class="sec"><h4>Other meanings</h4><p>{ex.other_meanings.join(" · ")}</p></div>
-            )}
-            {ex.confusion && <div class="sec"><h4>Watch out</h4><p>{ex.confusion}</p></div>}
-            {ex.breakdown.length > 0 && (
-              <div class="sec"><h4>Word by word</h4>
-                <div class="g">{ex.breakdown.map((b) => <><b>{b.word}</b><span>{b.note}</span></>)}</div>
-              </div>
-            )}
             {ex.examples.length > 0 && (
-              <div class="sec"><h4>Examples</h4>
+              <div class="sec"><h4>Example</h4>
                 {ex.examples.map((e) => (
                   <div class="ex"><div class="de">{e.de}</div><div class="lit">{e.literal}</div><div class="fl">{e.fluent}</div></div>
                 ))}

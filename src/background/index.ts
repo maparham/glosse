@@ -71,7 +71,7 @@ chrome.runtime.onConnect.addListener((port) => {
       return;
     }
     if (msg.type === "explain") {
-      const key = `e1:${settings.explainModel}:${settings.level}:${msg.ctx.selection}\u0000${msg.ctx.cue}`;
+      const key = `e3:${settings.explainModel}:${settings.level}:${msg.ctx.selection}\u0000${msg.ctx.cue}`;
       try {
         const cached = await getExplanation(key);
         if (cached) { send({ type: "explain-result", id: msg.id, explanation: cached, cached: true }); return; }

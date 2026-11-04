@@ -106,15 +106,8 @@ export interface Explanation {
   /** The exact form used here, e.g. "3rd person singular present, prefix moved to clause end". */
   form_here: string;
   grammar: { label: string; note: string }[];
-  /** Why the selection sits where it sits in the sentence. */
-  position: string;
   meaning_here: string;
-  other_meanings: string[];
-  /** One common confusion for learners. */
-  confusion: string;
   examples: { de: string; literal: string; fluent: string }[];
-  /** Word-by-word notes when the selection spans several words; empty for one word. */
-  breakdown: { word: string; note: string }[];
 }
 
 export interface ExplainContext {
