@@ -21,7 +21,7 @@ Phase 1 (gloss overlay) is implemented and untested against live YouTube. See [d
 On macOS, one script builds everything and opens Chrome at the right page:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/maparham/glosse/main/scripts/install-macos.sh | bash
+curl -fsSL https://raw.githubusercontent.com/maparham/glosse/phase-1-gloss-overlay/scripts/install-macos.sh | bash
 ```
 
 Rerun the same script after each update, then click the reload icon on the extension's card. Chrome has no supported way for a script to load an unpacked extension by itself, so the "Load unpacked" click on first install stays manual.
