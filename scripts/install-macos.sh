@@ -4,6 +4,10 @@
 # Usage, from a clone:        ./scripts/install-macos.sh
 # Or without a clone yet:     curl -fsSL https://raw.githubusercontent.com/maparham/glosse/phase-2-deep-dive/scripts/install-macos.sh | bash
 #
+# Optional, to bake an API key and base URL into the build (kept in the
+# gitignored .env.local, never committed):
+#   GLOSSE_API_KEY=sk-... GLOSSE_API_BASE_URL=https://your-proxy.example curl ... | bash
+#
 # What it does: installs Node via Homebrew if missing, clones or updates the
 # repo, builds the extension, opens chrome://extensions and reveals the dist
 # folder. Chrome has no supported way to load an unpacked extension from a
@@ -50,7 +54,18 @@ else
 fi
 cd "$PROJECT"
 
-# 3. Build
+# 3. Build-time defaults (optional). Written to .env.local, which git ignores.
+if [[ -n "${GLOSSE_API_KEY:-}" || -n "${GLOSSE_API_BASE_URL:-}" ]]; then
+  say "Writing build defaults to .env.local"
+  {
+    [[ -n "${GLOSSE_API_KEY:-}" ]] && echo "VITE_GLOSSE_API_KEY=${GLOSSE_API_KEY}"
+    [[ -n "${GLOSSE_API_BASE_URL:-}" ]] && echo "VITE_GLOSSE_API_BASE_URL=${GLOSSE_API_BASE_URL}"
+  } > .env.local
+elif [[ -f .env.local ]]; then
+  say "Keeping existing .env.local"
+fi
+
+# 4. Build
 say "Installing dependencies"
 npm install --no-fund --no-audit --silent
 say "Building"
@@ -58,7 +73,7 @@ npm run build --silent
 DIST="$PROJECT/dist"
 [[ -f "$DIST/manifest.json" ]] || die "Build did not produce dist/manifest.json."
 
-# 4. Hand over to Chrome
+# 5. Hand over to Chrome
 printf '%s' "$DIST" | pbcopy
 if [[ -d "/Applications/Google Chrome.app" ]]; then
   open -a "Google Chrome" "chrome://extensions/"

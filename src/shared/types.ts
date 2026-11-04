@@ -53,9 +53,13 @@ export interface Settings {
 
 export const DEFAULT_API_BASE_URL = "https://api.anthropic.com";
 
+/** Build-time defaults from .env.local, if the build had them. */
+const BAKED_KEY: string = (import.meta.env.VITE_GLOSSE_API_KEY as string | undefined) ?? "";
+const BAKED_BASE_URL: string = (import.meta.env.VITE_GLOSSE_API_BASE_URL as string | undefined) || DEFAULT_API_BASE_URL;
+
 export const DEFAULT_SETTINGS: Settings = {
-  apiKey: "",
-  apiBaseUrl: DEFAULT_API_BASE_URL,
+  apiKey: BAKED_KEY,
+  apiBaseUrl: BAKED_BASE_URL,
   level: "B1",
   glossModel: "claude-haiku-5-5",
   explainModel: "claude-opus-5-5",

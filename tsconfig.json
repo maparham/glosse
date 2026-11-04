@@ -12,7 +12,7 @@
     "isolatedModules": true,
     "resolveJsonModule": true,
     "allowImportingTsExtensions": true,
-    "types": ["chrome"]
+    "types": ["chrome", "node"]
   },
   "include": ["src", "manifest.config.ts", "vite.config.ts"]
 }

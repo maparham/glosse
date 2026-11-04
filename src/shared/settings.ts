@@ -4,7 +4,11 @@ const KEY = "settings";
 
 export async function loadSettings(): Promise<Settings> {
   const stored = await chrome.storage.local.get(KEY);
-  return { ...DEFAULT_SETTINGS, ...(stored[KEY] as Partial<Settings> | undefined) };
+  const merged = { ...DEFAULT_SETTINGS, ...(stored[KEY] as Partial<Settings> | undefined) };
+  // An empty saved key or URL means "unset": fall back to the build's defaults.
+  if (!merged.apiKey) merged.apiKey = DEFAULT_SETTINGS.apiKey;
+  if (!merged.apiBaseUrl) merged.apiBaseUrl = DEFAULT_SETTINGS.apiBaseUrl;
+  return merged;
 }
 
 export async function saveSettings(patch: Partial<Settings>): Promise<Settings> {

@@ -24,6 +24,12 @@ On macOS, one script builds everything and opens Chrome at the right page:
 curl -fsSL https://raw.githubusercontent.com/maparham/glosse/phase-2-deep-dive/scripts/install-macos.sh | bash
 ```
 
+To bake in an API key and a custom base URL so the build works without visiting the options page, pass them as environment variables. They are written to a gitignored `.env.local` and never committed:
+
+```bash
+GLOSSE_API_KEY=sk-... GLOSSE_API_BASE_URL=https://your-proxy.example bash -c "$(curl -fsSL https://raw.githubusercontent.com/maparham/glosse/phase-2-deep-dive/scripts/install-macos.sh)"
+```
+
 Rerun the same script after each update, then click the reload icon on the extension's card. Chrome has no supported way for a script to load an unpacked extension by itself, so the "Load unpacked" click on first install stays manual.
 
 Manually, on any platform:
