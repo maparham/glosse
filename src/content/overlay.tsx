@@ -62,11 +62,12 @@ function Panel({ state, actions, inline = false }: { state: OverlayState; action
     }
   };
 
-  /** Drag by the grip, keeping the panel inside the player. */
-  const onGripDown = (e: PointerEvent) => {
+  /** Drag by the grip or any part of the panel outside the word chips, keeping it inside the player. */
+  const onDragStart = (e: PointerEvent) => {
     const panel = panelRef.current;
     const host = (panel?.getRootNode() as ShadowRoot | undefined)?.host;
-    if (!panel || !host || e.button !== 0) return;
+    // Chips keep their click and drag-select behaviour.
+    if (inline || !panel || !host || e.button !== 0 || (e.target as Element).closest(".tok")) return;
     e.preventDefault();
     e.stopPropagation();
     const box = host.getBoundingClientRect();
@@ -97,11 +98,10 @@ function Panel({ state, actions, inline = false }: { state: OverlayState; action
   const style = pos && !inline ? { left: `${pos.x * 100}%`, top: `${pos.y * 100}%`, bottom: "auto", transform: "translate(-50%, -100%)" } : undefined;
 
   return (
-    <div ref={panelRef} style={style} class={`panel ${inline ? "inline" : ""} ${settings.colourPos ? "colour" : ""}`} onClick={(e) => e.stopPropagation()} onDblClick={(e) => e.stopPropagation()}>
+    <div ref={panelRef} style={style} class={`panel ${inline ? "inline" : ""} ${settings.colourPos ? "colour" : ""}`} onPointerDown={onDragStart} onClick={(e) => e.stopPropagation()} onDblClick={(e) => e.stopPropagation()}>
       {!inline && <div
         class="grip"
         title="Drag to move · double-click to reset"
-        onPointerDown={onGripDown}
         onDblClick={(e) => { e.stopPropagation(); actions.movePanel(null); }}
       />}
       {gloss && cue ? (

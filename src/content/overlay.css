@@ -6,6 +6,9 @@
   left: 50%;
   bottom: 64px;
   transform: translateX(-50%);
+  /* An absolute box shrinks to the space right of its left edge, so a panel
+     dragged off-centre would wrap early. Size to the line, capped by the player. */
+  width: max-content;
   max-width: 92%;
   padding: 10px 16px 8px;
   border-radius: 10px;
@@ -19,11 +22,14 @@
   line-height: 1.2;
 }
 
+.panel:not(.inline) { cursor: move; }
+
 .panel.inline {
   position: relative;
   left: auto;
   bottom: auto;
   transform: none;
+  width: auto;
   max-width: none;
 }
 
@@ -40,13 +46,13 @@
 .grip::after {
   content: "";
   position: absolute;
-  left: 8px;
-  right: 8px;
+  left: 6px;
+  right: 6px;
   top: 3px;
   height: 4px;
   border-radius: 2px;
-  background: rgba(255, 255, 255, 0.25);
-  opacity: 0;
+  background: rgba(255, 255, 255, 0.5);
+  opacity: 0.35;
   transition: opacity 120ms;
 }
 .panel:hover .grip::after { opacity: 1; }

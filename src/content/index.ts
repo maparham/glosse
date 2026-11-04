@@ -342,12 +342,9 @@ window.addEventListener("message", async (ev: MessageEvent<TimedTextMessage>) =>
   if (ev.source !== window || !m || m.source !== "glosse" || m.type !== "timedtext") return;
   await settingsLoaded;
   const info = trackInfo(m.url);
-  if (info.tlang) {
-    setCues([], "Auto-translate is on. Pick the German subtitle track itself (Settings → Subtitles → Deutsch).");
-    return;
-  }
-  if (info.lang && !info.lang.toLowerCase().startsWith("de")) {
-    setCues([], `Subtitle track is "${info.lang}". Switch to the German track.`);
+  // Not a German track (or an auto-translation into German): stay dormant.
+  if (info.tlang || (info.lang && !info.lang.toLowerCase().startsWith("de"))) {
+    setCues([], null);
     return;
   }
   const parsed = parseTimedText(m.body);
@@ -392,7 +389,7 @@ function leaveDomFallback() {
 /**
  * No usable track data: read the rendered caption text instead, one cue at a time.
  * Silent until the player actually renders a caption, so videos without subtitles show nothing,
- * and silent while the selected track is not German, so other captions are left alone.
+ * and silent unless the player confirms a German track, so other captions are left alone.
  */
 function startDomFallback() {
   if (stopDomFallback) return;
@@ -401,14 +398,13 @@ function startDomFallback() {
     const t = v?.currentTime ?? 0;
     const track = await queryTrack();
     if (!stopDomFallback) return;
-    if (track && (track.tlang || !track.lang?.toLowerCase().startsWith("de"))) {
+    if (!track || track.tlang || !track.lang?.toLowerCase().startsWith("de")) {
       if (domFallbackMode) leaveDomFallback();
       return;
     }
     if (!domFallbackMode) {
       domFallbackMode = true;
       cues = [];
-      setHint("Reading captions from the player. Turn on German subtitles for the best results.");
       hideNativeCaptions(settings.enabled);
     }
     // index always equals the array position, which fillQueue relies on.
