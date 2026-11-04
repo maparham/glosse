@@ -13,6 +13,11 @@ const MODELS: { id: string; label: string }[] = [
   { id: "claude-fable-5-1", label: "Claude Fable 5.1 — most capable overall, $10 / $50" },
 ];
 
+/** A small "?" that shows its explanation on hover. */
+function Help({ text }: { text: string }) {
+  return <span class="help" title={text} aria-label={text} tabIndex={0}>?</span>;
+}
+
 function ModelSelect({ value, onChange }: { value: string; onChange: (id: string) => void }) {
   const options = MODELS.some((m) => m.id === value) ? MODELS : [{ id: value, label: `${value} (custom)` }, ...MODELS];
   return (
@@ -74,12 +79,12 @@ function App() {
       </p>
       {permError && <p class="note" style="color:#b00">{permError}</p>}
 
-      <label>Your German level</label>
+      <label>Your German level <Help text="Sets how much the gloss and explanations assume you already know. Lower levels get more case and gender hints and simpler wording." /></label>
       <select value={s.level} onChange={(e) => update({ level: e.currentTarget.value as Level })}>
         {LEVELS.map((l) => <option value={l}>{l}</option>)}
       </select>
 
-      <label>Gloss style</label>
+      <label>Gloss style <Help text="Strict keeps every German word in its original position, even when the English reads oddly. Smoothed keeps the structure that teaches something (verb position, separable prefixes, clauses) but tidies small details." /></label>
       <select value={s.glossStyle} onChange={(e) => update({ glossStyle: e.currentTarget.value as Settings["glossStyle"] })}>
         <option value="strict">Strict: keep German word order exactly</option>
         <option value="smoothed">Smoothed: keep the structure, smooth small details</option>
@@ -92,12 +97,12 @@ function App() {
       <label>Explanation model (used from phase 2)</label>
       <ModelSelect value={s.explainModel} onChange={(explainModel) => update({ explainModel })} />
 
-      <label>Lines to gloss ahead of the playhead</label>
+      <label>Lines to gloss ahead of the playhead <Help text="How many upcoming subtitle lines are sent for glossing before they are shown, so the gloss is ready when the line appears. 5 is enough for normal speech. Raise it on fast or choppy videos; lower it to save a little on lines you may skip." /></label>
       <input type="number" min={1} max={20} value={s.lookahead} onInput={(e) => update({ lookahead: Number(e.currentTarget.value) || 5 })} />
 
       <div class="row" style="margin-top:14px">
         <input id="whole" type="checkbox" checked={s.glossWholeVideo} onChange={(e) => update({ glossWholeVideo: e.currentTarget.checked })} />
-        <label for="whole">Gloss the whole video in the background (about 1 cent per 10 minutes on Haiku)</label>
+        <label for="whole">Gloss the whole video in the background <Help text="After the lines just ahead of the playhead are done, the rest of the video is glossed nearest-first so the transcript panel fills up and jumping around never waits. Costs about 1 cent per 10 minutes on Haiku." /></label>
       </div>
       <div class="row">
         <input id="transcript" type="checkbox" checked={s.showTranscript} onChange={(e) => update({ showTranscript: e.currentTarget.checked })} />
