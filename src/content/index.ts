@@ -1,9 +1,9 @@
 import { observeRenderedCaptions, parseTimedText, trackInfo } from "./capture";
-import { mountOverlay, type OverlayActions, type OverlayState } from "./overlay";
+import { mountBelowPanel, mountOverlay, unmountBelowPanel, type OverlayActions, type OverlayState } from "./overlay";
 import type { PopoverState } from "./popover";
 import { mountTranscript, unmountTranscript, type TranscriptProps } from "./transcript";
 import { glossKey } from "../shared/hash";
-import { loadSettings, onSettingsChange, saveSettings } from "../shared/settings";
+import { loadPanelPos, loadSettings, onSettingsChange, savePanelPos, saveSettings } from "../shared/settings";
 import type { BackgroundResponse, Cue, ExplainPortRequest, ExplainPortResponse, Gloss, GlossRequestItem, Settings, TimedTextMessage } from "../shared/types";
 
 const BATCH = 5;
@@ -47,7 +47,7 @@ const emptyPopover = (): PopoverState => ({
 });
 
 const state: OverlayState = {
-  cue: null, gloss: null, status: null, error: null, hint: null,
+  cue: null, gloss: null, status: null, error: null, hint: null, hintFading: false, panelPos: null, panelBelow: false,
   settings: undefined as unknown as Settings,
   popover: emptyPopover(),
 };
@@ -116,6 +116,11 @@ function closeExplain() {
 const overlayActions: OverlayActions = {
   explain: openExplain,
   hover: (w) => { hoveredWord = w; },
+  movePanel: (pos) => {
+    state.panelPos = pos;
+    draw();
+    void savePanelPos(pos);
+  },
   close: closeExplain,
   ask: (question) => {
     const pop = state.popover;
@@ -139,6 +144,7 @@ const overlayActions: OverlayActions = {
 };
 
 const settingsLoaded = loadSettings().then((s) => (settings = s));
+void settingsLoaded.then(loadPanelPos).then((pos) => { state.panelPos = pos; draw(); });
 
 function keyFor(text: string): string {
   let k = keyCache.get(text);
@@ -185,7 +191,11 @@ function seekTo(cue: Cue) {
 
 function draw() {
   state.settings = settings;
+  const renderBelow = settings.panelPlacement === "below" && !document.fullscreenElement ? mountBelowPanel(overlayActions) : null;
+  if (!renderBelow && state.panelBelow) unmountBelowPanel();
+  state.panelBelow = renderBelow !== null;
   renderPanel?.(state);
+  renderBelow?.(state);
   const wantTranscript = settings.showTranscript && !domFallbackMode && cues.length > 0;
   if (!wantTranscript) {
     if (renderTranscript) { unmountTranscript(); renderTranscript = null; }
@@ -299,10 +309,25 @@ function sync() {
   draw();
 }
 
-function setCues(next: Cue[], hint: string | null) {
+let hintTimers: number[] = [];
+
+/** Show a hint; a transient one fades out after a few seconds. */
+function setHint(hint: string | null, transient = false) {
+  hintTimers.forEach(clearTimeout);
+  hintTimers = [];
+  state.hint = hint;
+  state.hintFading = false;
+  if (!hint || !transient) return;
+  hintTimers.push(
+    window.setTimeout(() => { state.hintFading = true; draw(); }, 5000),
+    window.setTimeout(() => { state.hint = null; state.hintFading = false; draw(); }, 5600),
+  );
+}
+
+function setCues(next: Cue[], hint: string | null, transientHint = false) {
   cues = next;
   domFallbackMode = false;
-  state.hint = hint;
+  setHint(hint, transientHint);
   state.error = null;
   stopDomFallback?.();
   stopDomFallback = null;
@@ -330,7 +355,7 @@ window.addEventListener("message", async (ev: MessageEvent<TimedTextMessage>) =>
     startDomFallback();
     return;
   }
-  setCues(parsed, info.kind === "asr" ? "Auto-generated captions: punctuation may be missing." : null);
+  setCues(parsed, info.kind === "asr" ? "Auto-generated captions: punctuation may be missing." : null, true);
 });
 
 let trackQuerySeq = 0;
@@ -358,7 +383,7 @@ function leaveDomFallback() {
   domFallbackMode = false;
   cues = [];
   currentIndex = -1;
-  state.cue = null; state.gloss = null; state.hint = null;
+  state.cue = null; state.gloss = null; setHint(null);
   hideNativeCaptions(false);
   version++;
   sync();
@@ -383,7 +408,7 @@ function startDomFallback() {
     if (!domFallbackMode) {
       domFallbackMode = true;
       cues = [];
-      state.hint = "Reading captions from the player. Turn on German subtitles for the best results.";
+      setHint("Reading captions from the player. Turn on German subtitles for the best results.");
       hideNativeCaptions(settings.enabled);
     }
     // index always equals the array position, which fillQueue relies on.
@@ -399,7 +424,7 @@ function onNavigate() {
   cues = [];
   currentIndex = -1;
   domFallbackMode = false;
-  state.cue = null; state.gloss = null; state.hint = null; state.error = null;
+  state.cue = null; state.gloss = null; setHint(null); state.error = null;
   state.popover = emptyPopover(); activeExplainId = ""; pausedByUs = false;
   hideNativeCaptions(false);
   stopDomFallback?.(); stopDomFallback = null;
@@ -458,6 +483,7 @@ function onKey(ev: KeyboardEvent) {
     sync();
   });
   document.addEventListener("yt-navigate-finish", onNavigate);
+  document.addEventListener("fullscreenchange", draw);
   document.addEventListener("keydown", onKey);
   onNavigate();
 })();

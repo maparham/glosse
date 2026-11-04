@@ -48,7 +48,15 @@ export interface Settings {
   colourPos: boolean;
   /** Strict word order, or lightly smoothed English. */
   glossStyle: "strict" | "smoothed";
+  /** Draw the subtitle panel over the video, or in the page below it (back on the video in fullscreen). */
+  panelPlacement: "video" | "below";
   enabled: boolean;
+}
+
+/** Where the subtitle panel was dragged to: its bottom-centre point, as fractions of the player's width and height. */
+export interface PanelPos {
+  x: number;
+  y: number;
 }
 
 export const DEFAULT_API_BASE_URL = "https://api.anthropic.com";
@@ -72,6 +80,7 @@ export const DEFAULT_SETTINGS: Settings = {
   showFluent: true,
   colourPos: true,
   glossStyle: "strict",
+  panelPlacement: "video",
   enabled: true,
 };
 

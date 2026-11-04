@@ -1,7 +1,9 @@
-import { BAKED_SIGNATURE, DEFAULT_SETTINGS, type Settings } from "./types";
+import { BAKED_SIGNATURE, DEFAULT_SETTINGS, type PanelPos, type Settings } from "./types";
 
 const KEY = "settings";
 const BAKED_KEY = "bakedSignature";
+/** Kept apart from settings so the options page, which saves settings whole, cannot overwrite it. */
+const PANEL_POS_KEY = "panelPos";
 
 export async function loadSettings(): Promise<Settings> {
   const stored = await chrome.storage.local.get([KEY, BAKED_KEY]);
@@ -33,4 +35,14 @@ export function onSettingsChange(cb: (s: Settings) => void): () => void {
   };
   chrome.storage.onChanged.addListener(listener);
   return () => chrome.storage.onChanged.removeListener(listener);
+}
+
+export async function loadPanelPos(): Promise<PanelPos | null> {
+  const stored = await chrome.storage.local.get(PANEL_POS_KEY);
+  return (stored[PANEL_POS_KEY] as PanelPos | undefined) ?? null;
+}
+
+export async function savePanelPos(pos: PanelPos | null): Promise<void> {
+  if (pos) await chrome.storage.local.set({ [PANEL_POS_KEY]: pos });
+  else await chrome.storage.local.remove(PANEL_POS_KEY);
 }

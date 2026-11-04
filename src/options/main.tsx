@@ -100,6 +100,12 @@ function App() {
       <label>Lines to gloss ahead of the playhead <Help text="How many upcoming subtitle lines are sent for glossing before they are shown, so the gloss is ready when the line appears. 5 is enough for normal speech. Raise it on fast or choppy videos; lower it to save a little on lines you may skip." /></label>
       <input type="number" min={1} max={20} value={s.lookahead} onInput={(e) => update({ lookahead: Number(e.currentTarget.value) || 5 })} />
 
+      <label>Subtitle position <Help text="On the video, the panel can be dragged anywhere over the picture by the grip at its top edge (double-click the grip to reset). Below the video puts it in the page under the player, above the title, so it never covers the picture; in fullscreen it goes back onto the video." /></label>
+      <select value={s.panelPlacement} onChange={(e) => update({ panelPlacement: e.currentTarget.value as Settings["panelPlacement"] })}>
+        <option value="video">On the video</option>
+        <option value="below">Below the video</option>
+      </select>
+
       <div class="row" style="margin-top:14px">
         <input id="whole" type="checkbox" checked={s.glossWholeVideo} onChange={(e) => update({ glossWholeVideo: e.currentTarget.checked })} />
         <label for="whole">Gloss the whole video in the background <Help text="After the lines just ahead of the playhead are done, the rest of the video is glossed nearest-first so the transcript panel fills up and jumping around never waits. Costs about 1 cent per 10 minutes on Haiku." /></label>
