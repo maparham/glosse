@@ -1,7 +1,8 @@
 import { glossBatch } from "./claude";
-import { getGlosses, putGlosses } from "./cache";
+import { getExplanation, getGlosses, putExplanation, putGlosses, saveVocab } from "./cache";
+import { explain, followUp } from "./explain";
 import { loadSettings } from "../shared/settings";
-import type { BackgroundRequest, BackgroundResponse, Gloss } from "../shared/types";
+import type { BackgroundRequest, BackgroundResponse, ExplainPortRequest, ExplainPortResponse, Gloss } from "../shared/types";
 
 /** Requests already on their way to the API, so a seek does not duplicate work. */
 const inFlight = new Map<string, Promise<Record<string, Gloss>>>();
@@ -50,6 +51,46 @@ chrome.runtime.onMessage.addListener((msg: BackgroundRequest, _sender, sendRespo
     }
   })();
   return true; // keep the channel open for the async response
+});
+
+/** Explanations and follow-ups run over a port so answers can stream back. */
+chrome.runtime.onConnect.addListener((port) => {
+  if (port.name !== "explain") return;
+  const send = (m: ExplainPortResponse) => {
+    try { port.postMessage(m); } catch { /* popover closed */ }
+  };
+  port.onMessage.addListener(async (msg: ExplainPortRequest) => {
+    const settings = await loadSettings();
+    if (msg.type === "save") {
+      try { await saveVocab(msg.entry); send({ type: "saved", ok: true }); }
+      catch { send({ type: "saved", ok: false }); }
+      return;
+    }
+    if (!settings.apiKey) {
+      send({ type: "explain-error", id: msg.id, error: "No API key. Open the extension options and add your Claude API key." });
+      return;
+    }
+    if (msg.type === "explain") {
+      const key = `e1:${settings.explainModel}:${settings.level}:${msg.ctx.selection}\u0000${msg.ctx.cue}`;
+      try {
+        const cached = await getExplanation(key);
+        if (cached) { send({ type: "explain-result", id: msg.id, explanation: cached, cached: true }); return; }
+        const explanation = await explain(msg.ctx, settings);
+        await putExplanation(key, explanation);
+        send({ type: "explain-result", id: msg.id, explanation, cached: false });
+      } catch (e) {
+        send({ type: "explain-error", id: msg.id, error: e instanceof Error ? e.message : String(e) });
+      }
+    } else if (msg.type === "followup") {
+      try {
+        await followUp(msg.ctx, msg.explanation, msg.history, msg.question, settings, (text) =>
+          send({ type: "followup-delta", id: msg.id, text }));
+        send({ type: "followup-done", id: msg.id });
+      } catch (e) {
+        send({ type: "explain-error", id: msg.id, error: e instanceof Error ? e.message : String(e) });
+      }
+    }
+  });
 });
 
 chrome.runtime.onInstalled.addListener(async () => {

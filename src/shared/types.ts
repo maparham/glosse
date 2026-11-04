@@ -42,6 +42,8 @@ export interface Settings {
   glossWholeVideo: boolean;
   /** Show the transcript panel beside the video. */
   showTranscript: boolean;
+  /** Pause the video while an explanation is open. */
+  pauseOnExplain: boolean;
   showFluent: boolean;
   colourPos: boolean;
   /** Strict word order, or lightly smoothed English. */
@@ -60,6 +62,7 @@ export const DEFAULT_SETTINGS: Settings = {
   lookahead: 5,
   glossWholeVideo: true,
   showTranscript: true,
+  pauseOnExplain: true,
   showFluent: true,
   colourPos: true,
   glossStyle: "strict",
@@ -89,4 +92,52 @@ export interface TimedTextMessage {
   type: "timedtext";
   url: string;
   body: string;
+}
+
+/** Phase 2: the deep-dive explanation of a selected word or span. */
+export interface Explanation {
+  lemma: string;
+  /** The exact form used here, e.g. "3rd person singular present, prefix moved to clause end". */
+  form_here: string;
+  grammar: { label: string; note: string }[];
+  /** Why the selection sits where it sits in the sentence. */
+  position: string;
+  meaning_here: string;
+  other_meanings: string[];
+  /** One common confusion for learners. */
+  confusion: string;
+  examples: { de: string; literal: string; fluent: string }[];
+  /** Word-by-word notes when the selection spans several words; empty for one word. */
+  breakdown: { word: string; note: string }[];
+}
+
+export interface ExplainContext {
+  selection: string;
+  cue: string;
+  prev: string;
+  next: string;
+}
+
+/** Messages over the long-lived port used for explanations. */
+export type ExplainPortRequest =
+  | { type: "explain"; id: string; ctx: ExplainContext }
+  | { type: "followup"; id: string; ctx: ExplainContext; explanation: Explanation; history: { q: string; a: string }[]; question: string }
+  | { type: "save"; entry: VocabEntry };
+
+export type ExplainPortResponse =
+  | { type: "explain-result"; id: string; explanation: Explanation; cached: boolean }
+  | { type: "explain-error"; id: string; error: string }
+  | { type: "followup-delta"; id: string; text: string }
+  | { type: "followup-done"; id: string }
+  | { type: "saved"; ok: boolean };
+
+export interface VocabEntry {
+  id: string;
+  selection: string;
+  lemma: string;
+  meaning: string;
+  cue: string;
+  videoId: string | null;
+  time: number;
+  savedAt: number;
 }

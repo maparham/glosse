@@ -1,9 +1,10 @@
 import { observeRenderedCaptions, parseTimedText, trackInfo } from "./capture";
-import { mountOverlay, type OverlayState } from "./overlay";
+import { mountOverlay, type OverlayActions, type OverlayState } from "./overlay";
+import type { PopoverState } from "./popover";
 import { mountTranscript, unmountTranscript, type TranscriptProps } from "./transcript";
 import { glossKey } from "../shared/hash";
 import { loadSettings, onSettingsChange, saveSettings } from "../shared/settings";
-import type { BackgroundResponse, Cue, Gloss, GlossRequestItem, Settings, TimedTextMessage } from "../shared/types";
+import type { BackgroundResponse, Cue, ExplainPortRequest, ExplainPortResponse, Gloss, GlossRequestItem, Settings, TimedTextMessage } from "../shared/types";
 
 const BATCH = 5;
 const MAX_IN_FLIGHT = 2;
@@ -40,9 +41,101 @@ let drawnIndex = -2;
 let drawnVersion = -1;
 let glossedCount = 0;
 
+const emptyPopover = (): PopoverState => ({
+  open: false, selection: "", cue: "", explanation: null, error: null,
+  startedAt: 0, history: [], streaming: null, saved: false,
+});
+
 const state: OverlayState = {
   cue: null, gloss: null, status: null, error: null, hint: null,
   settings: undefined as unknown as Settings,
+  popover: emptyPopover(),
+};
+
+// ---- Explanations (phase 2) -------------------------------------------------
+
+let explainPort: chrome.runtime.Port | null = null;
+let explainSeq = 0;
+let activeExplainId = "";
+let hoveredWord: string | null = null;
+/** True when we paused the video for the popover, so we resume on close. */
+let pausedByUs = false;
+let explainCtx: { selection: string; cue: string; prev: string; next: string } | null = null;
+
+function port(): chrome.runtime.Port {
+  if (explainPort) return explainPort;
+  explainPort = chrome.runtime.connect({ name: "explain" });
+  explainPort.onDisconnect.addListener(() => { explainPort = null; });
+  explainPort.onMessage.addListener((m: ExplainPortResponse) => {
+    const pop = state.popover;
+    if (m.type === "saved") { pop.saved = m.ok; draw(); return; }
+    if (m.id !== activeExplainId) return;
+    switch (m.type) {
+      case "explain-result": pop.explanation = m.explanation; pop.error = null; break;
+      case "explain-error":
+        if (pop.streaming !== null) { pop.streaming = null; }
+        pop.error = m.error; break;
+      case "followup-delta": pop.streaming = (pop.streaming ?? "") + m.text; break;
+      case "followup-done":
+        if (pop.streaming !== null) pop.history = [...pop.history, { q: pendingQuestion, a: pop.streaming }];
+        pop.streaming = null; break;
+    }
+    draw();
+  });
+  return explainPort;
+}
+let pendingQuestion = "";
+
+function send(m: ExplainPortRequest) {
+  try { port().postMessage(m); }
+  catch (e) { state.popover.error = e instanceof Error ? e.message : String(e); draw(); }
+}
+
+function openExplain(selection: string) {
+  const cue = state.cue;
+  if (!cue || !selection) return;
+  const v = video();
+  if (settings.pauseOnExplain && v && !v.paused) { v.pause(); pausedByUs = true; }
+  explainCtx = { selection, cue: cue.text, prev: cues[cue.index - 1]?.text ?? "", next: cues[cue.index + 1]?.text ?? "" };
+  activeExplainId = `x${++explainSeq}`;
+  state.popover = { ...emptyPopover(), open: true, selection, cue: cue.text, startedAt: Date.now() };
+  draw();
+  send({ type: "explain", id: activeExplainId, ctx: explainCtx });
+}
+
+function closeExplain() {
+  if (!state.popover.open) return;
+  state.popover = emptyPopover();
+  activeExplainId = "";
+  const v = video();
+  if (pausedByUs && v) v.play();
+  pausedByUs = false;
+  draw();
+}
+
+const overlayActions: OverlayActions = {
+  explain: openExplain,
+  hover: (w) => { hoveredWord = w; },
+  close: closeExplain,
+  ask: (question) => {
+    const pop = state.popover;
+    if (!pop.explanation || !explainCtx || pop.streaming !== null) return;
+    pendingQuestion = question;
+    pop.streaming = "";
+    pop.error = null;
+    draw();
+    send({ type: "followup", id: activeExplainId, ctx: explainCtx, explanation: pop.explanation, history: pop.history, question });
+  },
+  save: () => {
+    const pop = state.popover;
+    if (!pop.explanation) return;
+    const v = video();
+    send({ type: "save", entry: {
+      id: `${videoId ?? "x"}:${Math.round((v?.currentTime ?? 0) * 10)}:${pop.selection}`,
+      selection: pop.selection, lemma: pop.explanation.lemma, meaning: pop.explanation.meaning_here,
+      cue: pop.cue, videoId, time: v?.currentTime ?? 0, savedAt: Date.now(),
+    } });
+  },
 };
 
 const settingsLoaded = loadSettings().then((s) => (settings = s));
@@ -269,6 +362,7 @@ function onNavigate() {
   currentIndex = -1;
   domFallbackMode = false;
   state.cue = null; state.gloss = null; state.hint = null; state.error = null;
+  state.popover = emptyPopover(); activeExplainId = ""; pausedByUs = false;
   hideNativeCaptions(false);
   stopDomFallback?.(); stopDomFallback = null;
   version++;
@@ -280,7 +374,7 @@ function attach() {
   const p = player();
   const v = video();
   if (!p || !v) { setTimeout(attach, 500); return; }
-  renderPanel = mountOverlay(p);
+  renderPanel = mountOverlay(p, overlayActions);
   // YouTube can replace the <video> element; always follow the current one.
   if (boundVideo !== v) {
     boundVideo?.removeEventListener("timeupdate", sync);
@@ -294,9 +388,14 @@ function attach() {
 }
 
 function onKey(ev: KeyboardEvent) {
-  const t = ev.target as HTMLElement | null;
+  const t = (ev.composedPath()[0] ?? ev.target) as HTMLElement | null;
   if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
-  if (ev.key === "g" || ev.key === "G") {
+  if (ev.key === "Escape" && state.popover.open) {
+    ev.stopPropagation();
+    closeExplain();
+  } else if ((ev.key === "e" || ev.key === "E") && hoveredWord) {
+    openExplain(hoveredWord);
+  } else if (ev.key === "g" || ev.key === "G") {
     saveSettings({ enabled: !settings.enabled });
   } else if (ev.key === "[" || ev.key === "]") {
     const v = video();

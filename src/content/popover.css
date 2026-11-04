@@ -1,0 +1,61 @@
+.pop {
+  position: absolute;
+  right: 16px;
+  top: 16px;
+  bottom: 140px;
+  width: min(440px, 46%);
+  display: flex;
+  flex-direction: column;
+  border-radius: 12px;
+  background: rgba(14, 14, 16, 0.94);
+  color: #f2f2f2;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-size: 14px;
+  line-height: 1.4;
+  text-align: left;
+  pointer-events: auto;
+  z-index: 70;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+  backdrop-filter: blur(6px);
+}
+.pop-head {
+  display: flex; align-items: baseline; gap: 10px;
+  padding: 12px 14px 8px; border-bottom: 1px solid rgba(255,255,255,0.12);
+}
+.pop-sel { font-size: 22px; font-weight: 700; }
+.pop-lemma { color: #cfd3d8; font-size: 13px; }
+.pop-close {
+  margin-left: auto; background: transparent; border: 0; color: #aaa; font-size: 20px; cursor: pointer; line-height: 1;
+}
+.pop-close:hover { color: #fff; }
+.pop-body { overflow-y: auto; padding: 8px 14px 12px; flex: 1; }
+.sec { margin: 10px 0; }
+.sec h4 { margin: 0 0 3px; font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: #9aa0a6; }
+.sec p { margin: 0; }
+.g { display: grid; grid-template-columns: max-content 1fr; gap: 2px 10px; }
+.g b { color: #ffd166; font-weight: 600; }
+.ex { margin: 6px 0; padding-left: 10px; border-left: 2px solid rgba(255,255,255,0.18); }
+.ex .de { font-weight: 600; }
+.ex .lit { color: #cfd3d8; font-style: italic; font-size: 13px; }
+.ex .fl { color: #9aa0a6; font-size: 13px; }
+.wait { color: #cfd3d8; padding: 20px 0; text-align: center; }
+.err { color: #ff8a8a; }
+.pop-foot { border-top: 1px solid rgba(255,255,255,0.12); padding: 8px 14px 10px; }
+.qa { margin-bottom: 8px; }
+.qa .q { color: #ffd166; font-weight: 600; }
+.qa .a { white-space: pre-wrap; }
+.ask { display: flex; gap: 6px; }
+.ask input {
+  flex: 1; padding: 7px 9px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.2);
+  background: rgba(255,255,255,0.06); color: #fff; font-size: 13px;
+}
+.ask button, .save {
+  padding: 6px 10px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.25);
+  background: rgba(255,255,255,0.08); color: #fff; font-size: 13px; cursor: pointer;
+}
+.ask button:hover, .save:hover { background: rgba(255,255,255,0.16); }
+.save.done { color: #9ae6b4; }
+.pop-actions { display: flex; gap: 8px; align-items: center; margin-top: 8px; font-size: 12px; color: #9aa0a6; }
+@media (max-width: 700px) {
+  .pop { left: 8px; right: 8px; width: auto; top: 8px; bottom: 120px; }
+}

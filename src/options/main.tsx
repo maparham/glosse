@@ -94,7 +94,7 @@ function App() {
       <ModelSelect value={s.glossModel} onChange={(glossModel) => update({ glossModel })} />
       <p class="note">Haiku is recommended here: it runs on every line and costs about a cent per 10 minutes of video.</p>
 
-      <label>Explanation model (used from phase 2)</label>
+      <label>Explanation model (click a word or select a span) <Help text="Used for the deep dive: grammar breakdown, meaning in context, examples and follow-up questions. Called only when you ask, so a stronger model is worth it here." /></label>
       <ModelSelect value={s.explainModel} onChange={(explainModel) => update({ explainModel })} />
 
       <label>Lines to gloss ahead of the playhead <Help text="How many upcoming subtitle lines are sent for glossing before they are shown, so the gloss is ready when the line appears. 5 is enough for normal speech. Raise it on fast or choppy videos; lower it to save a little on lines you may skip." /></label>
@@ -107,6 +107,10 @@ function App() {
       <div class="row">
         <input id="transcript" type="checkbox" checked={s.showTranscript} onChange={(e) => update({ showTranscript: e.currentTarget.checked })} />
         <label for="transcript">Show the transcript panel beside the video (click a line to jump there)</label>
+      </div>
+      <div class="row">
+        <input id="pause" type="checkbox" checked={s.pauseOnExplain} onChange={(e) => update({ pauseOnExplain: e.currentTarget.checked })} />
+        <label for="pause">Pause the video while an explanation is open</label>
       </div>
       <div class="row">
         <input id="fluent" type="checkbox" checked={s.showFluent} onChange={(e) => update({ showFluent: e.currentTarget.checked })} />
@@ -124,7 +128,7 @@ function App() {
       <button type="submit">Save</button> {saved && <span class="ok">Saved</span>}
 
       <p class="note" style="margin-top:24px">
-        Keys on a video: <b>G</b> toggle overlay, <b>[</b> and <b>]</b> replay previous or next line.
+        Keys on a video: <b>G</b> toggle overlay, <b>E</b> explain the word under the cursor, <b>Esc</b> close the explanation, <b>[</b> and <b>]</b> replay previous or next line.
       </p>
     </form>
   );
