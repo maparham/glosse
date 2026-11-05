@@ -42,7 +42,7 @@ npm run build
 1. Open `chrome://extensions`, turn on Developer mode, click **Load unpacked**, pick the `dist` folder.
 2. The options page opens. Paste your Claude API key (console.anthropic.com), pick your level, save.
    The API base URL can be changed there too, for a proxy or gateway; Chrome asks once to allow the new host.
-3. Open a YouTube video that has a **German subtitle track** and turn it on (Settings → Subtitles → Deutsch, not auto-translate).
+3. Open a YouTube video that has a **German subtitle track** and turn it on (Settings → Subtitles → Deutsch, not auto-translate). Auto-generated German captions work too: their rolling lines are regrouped into sentences using the per-word timings.
 4. The native captions are replaced by the three-line panel: German, literal gloss, fluent English.
 5. A transcript panel appears above the recommendations column with every line and its gloss. Click a line to jump there. The whole video is glossed in the background, nearest lines first.
 6. Click any German word in the panel, or drag across several, for a deep dive on Opus: the exact form, grammar points, why it sits where it does, meaning in this line, a common confusion, examples, and a word-by-word breakdown for spans. Ask follow-up questions in the box at the bottom. The video pauses while it is open and resumes on close.

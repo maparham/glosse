@@ -1,4 +1,4 @@
-import { observeRenderedCaptions, parseTimedText, trackInfo } from "./capture";
+import { observeRenderedCaptions, parseTimedText, rollingLines, trackInfo } from "./capture";
 import { mountBelowPanel, mountOverlay, unmountBelowPanel, type OverlayActions, type OverlayState } from "./overlay";
 import type { PopoverState } from "./popover";
 import { mountTranscript, unmountTranscript, type TranscriptProps } from "./transcript";
@@ -347,7 +347,7 @@ window.addEventListener("message", async (ev: MessageEvent<TimedTextMessage>) =>
     setCues([], null);
     return;
   }
-  const parsed = parseTimedText(m.body);
+  const parsed = parseTimedText(m.body, info.kind === "asr");
   if (parsed.length === 0) {
     startDomFallback();
     return;
@@ -357,11 +357,13 @@ window.addEventListener("message", async (ev: MessageEvent<TimedTextMessage>) =>
 
 let trackQuerySeq = 0;
 
+type PlayerTrack = { lang: string | null; tlang: string | null; kind: string | null };
+
 /** Ask the MAIN-world script which caption track the player shows. Null if it does not answer. */
-function queryTrack(): Promise<{ lang: string | null; tlang: string | null } | null> {
+function queryTrack(): Promise<PlayerTrack | null> {
   const id = ++trackQuerySeq;
   return new Promise((resolve) => {
-    const done = (r: { lang: string | null; tlang: string | null } | null) => {
+    const done = (r: PlayerTrack | null) => {
       window.removeEventListener("message", onReply);
       clearTimeout(timer);
       resolve(r);
@@ -390,18 +392,12 @@ function leaveDomFallback() {
  * No usable track data: read the rendered caption text instead, one cue at a time.
  * Silent until the player actually renders a caption, so videos without subtitles show nothing,
  * and silent unless the player confirms a German track, so other captions are left alone.
+ * Auto-generated captions roll in word by word, so on those only finished lines become cues.
  */
 function startDomFallback() {
   if (stopDomFallback) return;
-  stopDomFallback = observeRenderedCaptions(async (text) => {
-    const v = video();
-    const t = v?.currentTime ?? 0;
-    const track = await queryTrack();
-    if (!stopDomFallback) return;
-    if (!track || track.tlang || !track.lang?.toLowerCase().startsWith("de")) {
-      if (domFallbackMode) leaveDomFallback();
-      return;
-    }
+  const addCue = (text: string) => {
+    const t = video()?.currentTime ?? 0;
     if (!domFallbackMode) {
       domFallbackMode = true;
       cues = [];
@@ -410,7 +406,24 @@ function startDomFallback() {
     // index always equals the array position, which fillQueue relies on.
     cues = [...cues, { index: cues.length, start: t, end: t + 6, text }];
     sync();
+  };
+  const rolling = rollingLines(addCue);
+  let hinted = false;
+  const stopObserving = observeRenderedCaptions(async (lines) => {
+    const track = await queryTrack();
+    if (!stopDomFallback) return;
+    if (!track || track.tlang || !track.lang?.toLowerCase().startsWith("de")) {
+      if (domFallbackMode) leaveDomFallback();
+      return;
+    }
+    if (track.kind === "asr") {
+      rolling.push(lines);
+      if (!hinted) { hinted = true; setHint("Auto-generated captions: each line appears once it is finished.", true); }
+    } else if (lines.length) {
+      addCue(lines.join(" "));
+    }
   });
+  stopDomFallback = () => { stopObserving(); rolling.stop(); };
 }
 
 function onNavigate() {

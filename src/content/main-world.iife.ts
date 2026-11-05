@@ -13,7 +13,7 @@
 
   // The content script cannot reach the player API, so it asks here which
   // caption track is selected when it has to read rendered captions.
-  type CaptionTrack = { languageCode?: string; translationLanguage?: { languageCode?: string } };
+  type CaptionTrack = { languageCode?: string; kind?: string; translationLanguage?: { languageCode?: string } };
   window.addEventListener("message", (ev) => {
     const m = ev.data;
     if (ev.source !== window || !m || m.source !== SOURCE || m.type !== "track-query") return;
@@ -27,6 +27,7 @@
     window.postMessage({
       source: SOURCE, type: "track", id: m.id,
       lang: track?.languageCode ?? null, tlang: track?.translationLanguage?.languageCode ?? null,
+      kind: track?.kind ?? null,
     }, "*");
   });
 
