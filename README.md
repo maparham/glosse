@@ -53,7 +53,7 @@ Keys on a video: **G** toggles the overlay, **E** explains the word under the cu
 
 - `src/content/main-world.iife.ts` runs in the page and watches the player's own caption requests, so every cue with timing is known up front.
 - `src/content/index.ts` keeps the panel in sync with the playhead and asks for glosses a few lines ahead, five cues per request, two requests in flight.
-- `src/background/index.ts` holds the API key, checks the IndexedDB cache, and calls Claude (`claude-haiku-5-5` by default) with a structured-output schema. Explanations and follow-ups go over a long-lived port so answers can stream, using `src/background/explain.ts` on `claude-opus-5-5`.
+- `src/background/index.ts` holds the API key, checks the IndexedDB cache, and calls Claude (`claude-haiku-5-5` by default) with a structured-output schema. Explanations and follow-ups go over a long-lived port so answers can stream, using `src/background/explain.ts` (also `claude-haiku-5-5` by default).
 - If no caption data arrives, the content script falls back to reading the rendered caption text.
 
 The API key lives in `chrome.storage.local` and is only read by the background worker. Only subtitle text is sent to `api.anthropic.com`.

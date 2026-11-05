@@ -72,7 +72,7 @@ export const DEFAULT_SETTINGS: Settings = {
   apiBaseUrl: BAKED_BASE_URL,
   level: "B1",
   glossModel: "claude-haiku-5-5",
-  explainModel: "claude-opus-5-5",
+  explainModel: "claude-haiku-5-5",
   lookahead: 5,
   glossWholeVideo: true,
   showTranscript: true,

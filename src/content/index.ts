@@ -182,11 +182,12 @@ function hideNativeCaptions(hide: boolean) {
   }
 }
 
-function seekTo(cue: Cue) {
+/** Jump to a cue, then keep playing or hold paused on it. */
+function seekTo(cue: Cue, pause = false) {
   const v = video();
   if (!v) return;
   v.currentTime = cue.start + 0.01;
-  v.play();
+  if (pause) v.pause(); else v.play();
 }
 
 function draw() {
@@ -209,7 +210,7 @@ function draw() {
   }
   drawnIndex = currentIndex;
   drawnVersion = version;
-  renderTranscript({ cues, glossFor, currentIndex, glossedCount, settings, onSeek: seekTo, version });
+  renderTranscript({ cues, glossFor, currentIndex, glossedCount, settings, onSeek: (c) => seekTo(c, true), version });
 }
 
 function noteFailure(keys: string[]) {
